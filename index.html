@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flappy Bird with Motion</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #70c5ce;
+      width: 100%;
+      height: 100%;
+    }
+    video {
+      width: 480px;
+      height: 360px;
+/*      border: 4px solid lime;*/
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      left: 0;
+      top: 0;
+      z-index: 1;
+    }
+
+    #webcam {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 320px;
+      height: 210px;
+/*      border: 3px solid #fff;*/
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+  <video id="webcam" autoplay muted playsinline></video>
+  <canvas id="gameCanvas"></canvas>
+  <img id="ground" src="assets/bricks.jpg" style="display:none;">
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const video = document.getElementById("webcam");
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;  
+
+    let birdY = canvas.height / 2;
+    let velocity = 0;
+    const gravity = 0.3;
+    const jump = -5;
+
+    let pipes = [];
+    const pipeWidth = 100;
+    const pipeGap = 400;
+    let frameCount = 0;
+    let score = 0;
+    let gameOver = false;
+    let gameStarted = false;
+
+    const groundHeight = 240; // height of brick floor
+
+    window.onload = () => {
+      setupCamera().then(() => {
+        drawStartScreen();
+      });
+    };
+
+    // Keyboard flap
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        if (!gameStarted || gameOver) {
+          resetGame();
+          gameStarted = true;
+          gameLoop();
+        } else if (!gameOver) {
+          velocity = jump;
+        }
+      }
+    });
+
+    // Setup camera feed
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.getElementById("webcam");
+        video.srcObject = stream;
+        await video.play();
+        console.log("✅ Webcam started");
+      } catch (err) {
+        console.error("❌ Webcam access denied or error", err);
+        alert("Please allow webcam access.");
+      }
+    }
+
+    // Motion detection to flap
+    let lastFrame = null;
+    function detectMotion() {
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) return;
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tempCtx = tempCanvas.getContext("2d");
+
+      tempCtx.drawImage(video, 0, 0, width, height);
+      const frame = tempCtx.getImageData(0, 0, width, height);
+
+      if (lastFrame) {
+        let changedPixels = 0;
+        for (let i = 0; i < frame.data.length; i += 4) {
+          const rDiff = Math.abs(frame.data[i] - lastFrame.data[i]);
+          const gDiff = Math.abs(frame.data[i + 1] - lastFrame.data[i + 1]);
+          const bDiff = Math.abs(frame.data[i + 2] - lastFrame.data[i + 2]);
+          if (rDiff + gDiff + bDiff > 50) changedPixels++;
+        }
+
+        if (changedPixels > 5000 && !gameOver && gameStarted) {
+          velocity = jump;
+        }
+      }
+
+      lastFrame = frame;
+    }
+
+    function resetGame() {
+      birdY = canvas.height / 2;
+      velocity = 0;
+      pipes = [];
+      frameCount = 0;
+      score = 0;
+      gameOver = false;
+      drawStartScreen();
+    }
+
+    function drawBird() {
+      ctx.beginPath();
+      ctx.arc(100, birdY, 20, 0, Math.PI * 2);
+      ctx.fillStyle = "yellow";
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawPipes() {
+      ctx.fillStyle = "green";
+      pipes.forEach(pipe => {
+        ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
+        ctx.fillRect(pipe.x, pipe.top + pipeGap, pipeWidth, canvas.height - pipe.top - pipeGap);
+      });
+    }
+
+    function updatePipes() {
+      pipes.forEach(pipe => {
+        pipe.x -= 2;
+
+        if (!pipe.passed && pipe.x + pipeWidth < 100) {
+          score++;
+          pipe.passed = true;
+        }
+
+        if (
+          100 + 20 > pipe.x &&
+          100 - 20 < pipe.x + pipeWidth &&
+          (birdY - 20 < pipe.top || birdY + 20 > pipe.top + pipeGap)
+        ) {
+          gameOver = true;
+        }
+      });
+
+      if (frameCount % 300 === 0) {
+        const brickHeight = 240;
+        const topHeight = Math.floor(Math.random() * (canvas.height - pipeGap - groundHeight - 50)) + 30;
+        pipes.push({ x: canvas.width, top: topHeight, passed: false });
+      }
+
+      pipes = pipes.filter(pipe => pipe.x + pipeWidth > 0);
+    }
+
+    function drawScore() {
+      ctx.font = "24px Arial";
+      ctx.fillStyle = "white";
+      const scoreText = "Score: " + score;
+      ctx.fillText(scoreText, canvas.width - 150, 30);
+    }
+
+    function drawGameOver() {
+      ctx.font = "48px Arial";
+      ctx.fillStyle = "red";
+      ctx.fillText("Game Over", canvas.width / 2 - 150, canvas.height / 2);
+      ctx.font = "24px Arial";
+      ctx.fillStyle = "white";
+      ctx.fillText("Press SPACE to Start Again", canvas.width / 2 - 150, canvas.height / 2 + 40);
+    }
+
+    function drawStartMessage() {
+      ctx.font = "36px Arial";
+      ctx.fillStyle = "white";
+      ctx.fillText("Press SPACE to Start", canvas.width / 2 - 170, canvas.height / 2);
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      detectMotion();
+
+        if (!gameOver) {
+          velocity += gravity;
+          birdY += velocity;
+
+        if (birdY > canvas.height - groundHeight - 20) {
+          birdY = canvas.height - groundHeight - 20;
+          velocity = 0;
+          gameOver = true;
+        }
+
+        if (birdY < 20) {
+          birdY = 20;
+          velocity = 0;
+        }
+
+        updatePipes();
+      }
+
+      drawPipes();
+      drawGround();
+      drawBird();
+      drawScore();
+
+      if (gameOver) {
+        drawGameOver();
+      } else {
+        frameCount++;
+        requestAnimationFrame(gameLoop);
+      }
+    }
+
+    function drawStartScreen() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBird();
+      drawStartMessage();
+    }
+
+    setupCamera().then(() => {
+      drawStartScreen();
+    });
+
+    // bricks
+    function drawGround() {
+      const groundImg = document.getElementById("ground");
+      const pattern = ctx.createPattern(groundImg, "repeat");
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
+    }
+  </script>
+</body>
+</html>
