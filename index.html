@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Flappy Bird</title>
+  <title>Flappy Bird with Motion</title>
   <style>
     html, body {
       margin: 0;
@@ -49,11 +49,13 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;  
 
+    // bird attributes
     let birdY = canvas.height / 2;
     let velocity = 0;
     const gravity = 0.3;
     const jump = -5;
 
+    // pipe attributes
     let pipes = [];
     const pipeWidth = 100;
     const pipeGap = 400;
@@ -133,9 +135,16 @@
       birdY = canvas.height / 2;
       velocity = 0;
       pipes = [];
-      frameCount = 0;
+
+      // Add a pipe close to the bird right away
+      const firstPipeX = 300; // Adjust distance (e.g., 250–350)
+      const topHeight = Math.floor(Math.random() * (canvas.height - pipeGap - groundHeight - 50)) + 30;
+      pipes.push({ x: firstPipeX, top: topHeight, passed: false });
+
+      frameCount = 0; // Start counting fresh for uniform gaps
       score = 0;
       gameOver = false;
+
       drawStartScreen();
     }
 
