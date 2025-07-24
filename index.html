@@ -45,6 +45,10 @@
   <img id="bird2" src="assets/flappy-bird-2.png" style="display:none;">
   <img id="pipeTip" src="assets/pipe-tip.png" style="display:none;">
   <img id="pipeBody" src="assets/pipe-body.png" style="display:none;">
+  <div id="volumeControlContainer" style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; color: white; z-index: 5;">
+    <label for="volumeSlider">🔊</label>
+    <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.5">
+  </div>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
@@ -65,7 +69,7 @@
     // pipe attributes
     let pipes = [];
     const pipeWidth = 100;
-    const pipeGap = 300;
+    const pipeGap = 360;
     let frameCount = 0;
     let score = 0;
     let gameOver = false;
@@ -73,6 +77,14 @@
     let pipeSpeed = 2; // Initial pipe speed
 
     let gameOverSoundPlayed = false;
+
+    // countdown
+    let countdown = 3;
+    let isCountingDown = false;
+
+    // pause
+    let isPaused = false;
+
 
     const groundHeight = 240; // height of brick floor
 
@@ -82,24 +94,85 @@
       });
     };
 
-    // Keyboard flap
-    document.addEventListener("keydown", (e) => {
-  if (e.code === "Space") {
-    if (!gameStarted || gameOver) {
+    // Keyboard flap, enter, pause
+document.addEventListener("keydown", (e) => {
+  // Start game with ENTER
+  if (e.code === "Enter") {
+    if ((gameOver || !gameStarted) && !isCountingDown) {
       resetGame();
+      startCountdown();
+    }
+  }
+
+  // Flap with SPACE
+  if (e.code === "Space") {
+    if (!gameOver && gameStarted && !isCountingDown && !isPaused) {
+      velocity = jump;
+    }
+  }
+
+  // Toggle pause with P
+  if (e.code === "KeyP" && gameStarted && !gameOver && !isCountingDown) {
+    isPaused = !isPaused;
+    if (!isPaused) {
+      requestAnimationFrame(gameLoop);
+    } // drawPauseMessage will be called from gameLoop if paused
+  }
+});
+
+function drawPauseMessage() {
+  ctx.font = "48px Arial";
+  ctx.fillStyle = "orange";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("GAME PAUSED", canvas.width / 2, canvas.height / 2);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+}
+
+
+
+    function startCountdown() {
+  isCountingDown = true;
+  countdown = 3;
+
+  const countdownInterval = setInterval(() => {
+    drawCountdown(countdown);
+    if (countdown === 0) {
+      clearInterval(countdownInterval);
       gameStarted = true;
+      isCountingDown = false;
       gameLoop();
 
-      // Start BGM only on first start
+      // Start background music
       const bgm = document.getElementById("bgm");
       if (bgm.paused) {
         bgm.play();
       }
-    } else if (!gameOver) {
-      velocity = jump;
     }
+    countdown--;
+  }, 1000);
+}
+function drawCountdown(number) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawClouds();
+  drawGround();
+  drawBird();
+  drawPipes();
+  drawScore();
+
+  ctx.font = "bold 96px Arial";
+  ctx.fillStyle = "yellow";
+  ctx.textAlign = "center";
+  if (number > 0) {
+    ctx.fillText(number.toString(), canvas.width / 2, canvas.height / 2);
+  } else {
+    ctx.fillText("GO!", canvas.width / 2, canvas.height / 2);
   }
-});
+}
+
+
 
     // Setup camera feed
     async function setupCamera() {
@@ -139,7 +212,7 @@
           if (rDiff + gDiff + bDiff > 50) changedPixels++;
         }
 
-        if (changedPixels > motionThreshold && !gameOver && gameStarted) {
+        if (changedPixels > motionThreshold && !gameOver && gameStarted && !isCountingDown) {
           velocity = jump;
         }
       }
@@ -313,30 +386,43 @@ function drawScore() {
 function drawGameOver() {
   ctx.font = "48px Arial";
   ctx.fillStyle = "red";
-  ctx.fillText("GAME OVER", canvas.width / 2 - 150, canvas.height / 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
+
   ctx.font = "24px Arial";
   ctx.fillStyle = "white";
-  ctx.fillText("Press SPACE to Start Again", canvas.width / 2 - 150, canvas.height / 2 + 40);
+  ctx.fillText("Press ENTER to Start Again", canvas.width / 2, canvas.height / 2 + 20);
 }
 
 function drawStartMessage() {
   ctx.font = "36px Arial";
   ctx.fillStyle = "white";
-  ctx.fillText("Press SPACE to Start", canvas.width / 2 - 170, canvas.height / 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Press ENTER to Start", canvas.width / 2, canvas.height / 2);
 }
 
+
 function gameLoop() {
+  if (isPaused) {
+    drawPauseMessage(); // draw paused screen
+    return; // stop updating game
+  }
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   detectMotion();
-  // Always move clouds
-    clouds.forEach(cloud => {
-      cloud.x -= pipeSpeed * 0.3;
-      if (cloud.x < -150) {
-        cloud.x = canvas.width + Math.random() * 200;
-        cloud.y = Math.random() * (canvas.height / 2);
-        cloud.img = cloudImages[Math.floor(Math.random() * cloudImages.length)];
-      }
-    });
+
+  // Move clouds
+  clouds.forEach(cloud => {
+    cloud.x -= pipeSpeed * 0.3;
+    if (cloud.x < -150) {
+      cloud.x = canvas.width + Math.random() * 200;
+      cloud.y = Math.random() * (canvas.height / 2);
+      cloud.img = cloudImages[Math.floor(Math.random() * cloudImages.length)];
+    }
+  });
 
   if (!gameOver) {
     velocity += gravity;
@@ -347,12 +433,7 @@ function gameLoop() {
       velocity = 0;
       gameOver = true;
     }
-    if (gameOver && !gameOverSoundPlayed) {
-      document.getElementById("bgm").pause();
-      document.getElementById("bgm").currentTime = 0;
-      document.getElementById("gameoverSound").play();
-      gameOverSoundPlayed = true;
-    }
+
     if (birdY < 20) {
       birdY = 20;
       velocity = 0;
@@ -361,7 +442,7 @@ function gameLoop() {
     updatePipes();
   }
 
-  drawClouds();   // draw behind everything
+  drawClouds();
   drawPipes();
   drawGround();
   drawBird();
@@ -375,12 +456,53 @@ function gameLoop() {
   }
 }
 
+function drawPauseMessage() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height); // clear previous frame
+  drawClouds();
+  drawPipes();
+  drawGround();
+  drawBird();
+  drawScore();
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = "48px Arial";
+  ctx.fillStyle = "orange";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("GAME PAUSED", canvas.width / 2, canvas.height / 2);
+}
+
+
 function drawStartScreen() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawClouds();
   drawBird();
   drawStartMessage();
 }
+document.addEventListener("DOMContentLoaded", () => {
+  const volumeSlider = document.getElementById("volumeSlider");
+  const bgm = document.getElementById("bgm");
+  const gameoverSound = document.getElementById("gameoverSound");
+
+  if (bgm && gameoverSound && volumeSlider) {
+    // Set initial volume
+    const initialVolume = parseFloat(volumeSlider.value);
+    bgm.volume = initialVolume;
+    gameoverSound.volume = initialVolume;
+
+    // Update volume when slider changes
+    volumeSlider.addEventListener("input", () => {
+      const newVolume = parseFloat(volumeSlider.value);
+      bgm.volume = newVolume;
+      gameoverSound.volume = newVolume;
+    });
+  } else {
+    console.warn("Volume elements not found");
+  }
+});
+
 
   </script>
   <audio id="bgm" src="assets/bgm.mp3" loop></audio>
